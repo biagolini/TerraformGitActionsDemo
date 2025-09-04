@@ -1,4 +1,4 @@
-name: 'Terraform Deploy [Dev] with Manual Approval'
+name: 'Terraform Deploy [Dev] with AI-Enhanced Manual Approval'
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   plan:
-    name: 'Terraform Plan'
+    name: 'Plan'
     runs-on: ubuntu-latest
 
     permissions:
@@ -47,13 +47,24 @@ jobs:
           terraform plan -var-file=terraform.tfvars -out=tfplan -no-color
           terraform show -no-color tfplan > plan_output.txt
 
-      - name: 'Upload Plan Artifact'
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 'Generate AI Summary'
+        run: |
+          pip install boto3
+          python3 ../../.github/generate_ai_summary.py plan_output.txt ai_summary.txt ${{ secrets.AWS_REGION }}
+
+      - name: 'Upload Plan Artifacts'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: |
             environments/dev/tfplan
             environments/dev/plan_output.txt
+            environments/dev/ai_summary.txt
 
       - name: 'Comment Plan on PR'
         if: github.event_name == 'pull_request'
@@ -62,9 +73,14 @@ jobs:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('environments/dev/plan_output.txt', 'utf8');
-            const output = `#### Terraform Plan 📖
+            const aiSummary = fs.readFileSync('environments/dev/ai_summary.txt', 'utf8');
 
-            <details><summary>Show Plan</summary>
+            const output = `# Terraform Plan
+
+            ## AI Summary of Changes
+            ${aiSummary}
+
+            <details><summary>Show Full Plan</summary>
 
             \`\`\`terraform
             ${plan}
@@ -81,11 +97,50 @@ jobs:
               body: output
             });
 
-  apply:
-    name: 'Terraform Apply'
+  prepare-approval:
+    name: 'AI Summary Preparation for Manual Approval'
     runs-on: ubuntu-latest
     needs: plan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: write
+      deployments: write
+
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+
+      - name: 'Download Plan Artifacts'
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: ./
+
+      - name: 'Display AI Summary'
+        run: |
+          echo "## AI Summary Available for Review"
+          echo "The AI summary has been generated and will be displayed in the apply job."
+          echo "Please review the summary before approving the deployment."
+
+      - name: 'Create Commit Comment with AI Summary'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const aiSummary = fs.readFileSync('ai_summary.txt', 'utf8');
+
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `## AI Summary of Infrastructure Changes\n\n${aiSummary}\n\n*This summary was generated automatically for the manual approval process.*`
+            });
+
+  apply:
+    name: 'Terraform Apply'
+    runs-on: ubuntu-latest
+    needs: prepare-approval
     environment: develop
 
     permissions:
@@ -111,11 +166,19 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      - name: 'Download Plan Artifact'
+      - name: 'Download Plan Artifacts'
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
           path: environments/dev/
+
+      - name: 'Display AI Summary for Reviewers'
+        run: |
+          echo "=== AI Summary of Infrastructure Changes ==="
+          cat ai_summary.txt
+          echo ""
+          echo "=== End of AI Summary ==="
+          echo "Full plan available in artifacts for detailed review."
 
       - name: 'Terraform Init'
         run: terraform init
