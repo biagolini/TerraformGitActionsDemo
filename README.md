@@ -2,27 +2,41 @@
 
 This repository demonstrates a minimal and secure CI/CD pipeline for deploying AWS infrastructure using Terraform and GitHub Actions. It leverages **OpenID Connect (OIDC)** for authentication, avoiding the use of static AWS credentials.
 
+**Enhanced Pipeline Features:**
+- Manual approval gates for infrastructure changes
+- AI-powered Terraform plan summaries using AWS Bedrock
+- Automated comments on pull requests and commits
+
+**Step-by-Step Tutorials:**
+1. [Creating a Secure and Modular Terraform Pipeline Using GitHub Actions](https://blog.devops.dev/creating-a-secure-and-modular-terraform-pipeline-using-github-actions-43abfa2723cf)
+2. [Implementing Manual Approval in GitHub Terraform Pipelines](https://medium.com/@biagolini/implementing-manual-approval-in-github-terraform-pipelines-7c01e6946ead)
+
+**More AWS, AI & Security Tutorials:** [https://medium.com/@biagolini](https://medium.com/@biagolini)
+
 ---
 
 ## Project Structure
 
 ```
-terraform/
-
 ├── module/                       # Reusable Terraform module (e.g., defines an S3 bucket)
 │   ├── main.tf
 │   └── variables.tf
 │
-├── environments/                # Environment-specific configurations
+├── environments/                 # Environment-specific configurations
 │   └── dev/
 │       ├── main.tf              # Module instantiation with environment-specific inputs
 │       ├── variables.tf         # Variable declarations expected by this environment
 │       ├── terraform.tfvars     # Values for variables (e.g., bucket_name)
 │       └── providers.tf         # AWS provider and backend S3/DynamoDB config
 │
-.github/
-└── workflows/
-    └── terraform.yml            # GitHub Actions workflow to run Terraform
+├── .github/
+│   ├── workflows/
+│   │   └── main.yml             # GitHub Actions workflow to run Terraform
+│   └── generate_ai_summary.py   # Python script for AI-powered plan summaries
+│
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
 
 ---
